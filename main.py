@@ -8,6 +8,7 @@ de la capa de presentació/renderitzat amb Pygame.
 import numpy as np
 import pyaudiowpatch as pyaudio
 import pygame
+import threading
 
 
 class AudioAnalyzer:
@@ -18,6 +19,8 @@ class AudioAnalyzer:
     ) -> None:
         self.chunk_size = chunk_size
         self.smoothing = smoothing
+        self.lock = threading.Lock()
+        self.running = True
 
         # Estat del filtre de suavitzat (Exponential Moving Average)
         self.bass_s = 0.0
@@ -89,12 +92,10 @@ class AudioAnalyzer:
         norm = max(0.0, min(1.0, norm))
         return norm, floor, ceil
 
-    def update(self) -> tuple[float, float, float]:
-        """Llegeix el buffer del micròfon/loopback i actualitza les energies filtrades.
-
-        Returns:
-            tuple[float, float, float]: Energies filtrades de (Graves, Mitjans, Aguts).
-        """
+    
+    def _process_frame(self) -> None:
+        """Llegeix un bloc d'àudio, el processa, i actualitza l'estat compartit (bass_s, mid_s, treble_s)."""
+        
         data = self.stream.read(self.chunk_size, exception_on_overflow=False)
         audio = np.frombuffer(data, dtype=np.float32)
 
@@ -121,15 +122,30 @@ class AudioAnalyzer:
         treble_norm, self.treble_floor, self.treble_ceil = self._normalize(treble, self.treble_floor, self.treble_ceil)
 
         # Suavitzat sobre el valor ja normalitzat (0-1)
-        self.bass_s = self.bass_s * (1 - self.smoothing) + bass_norm * self.smoothing
-        self.mid_s = self.mid_s * (1 - self.smoothing) + mid_norm * self.smoothing
-        self.treble_s = self.treble_s * (1 - self.smoothing) + treble_norm * self.smoothing
+        with self.lock:
+            self.bass_s = self.bass_s * (1 - self.smoothing) + bass_norm * self.smoothing
+            self.mid_s = self.mid_s * (1 - self.smoothing) + mid_norm * self.smoothing
+            self.treble_s = self.treble_s * (1 - self.smoothing) + treble_norm * self.smoothing
 
+    def _audio_loop(self):
+        """Bucle intern per a la captura d'àudio en un fil separat (Thread)."""
+        while self.running:
+            self._process_frame()
 
-        return bass_norm, mid_norm, treble_norm
+    def start(self) -> None:
+        """Inicia el fil de captura d'àudio."""
+        self.thread = threading.Thread(target=self._audio_loop, daemon=True)
+        self.thread.start()
 
+    def get_values(self) -> tuple[float, float, float]:
+        """Retorna les energies filtrades actuals (Graves, Mitjans, Aguts)."""
+        with self.lock:
+            return self.bass_s, self.mid_s, self.treble_s
+        
     def close(self) -> None:
         """Allibera els recursos del sistema d'àudio."""
+        self.running = False # el thread el fil ho veurà a la seva pròxima volta del while i sortirà sol
+        self.thread.join() # esperem que el fil acabi ABANS de tocar el stream per no tancar l'àudio mentre encara l'està llegint
         self.stream.stop_stream()
         self.stream.close()
         self.p.terminate()
@@ -190,13 +206,14 @@ def main():
     renderer = VisualizerRenderer(width=800, height=600)
 
     running = True
+    analyzer.start()
     try:
         while running:
             # 1. Entrada d'usuari
             running = renderer.process_events()
 
             # 2. Captura i Processament DSP
-            bass, mid, treble = analyzer.update()
+            bass, mid, treble = analyzer.get_values()
             #print(f"Bass: {bass:.2f}, Mid: {mid:.2f}, Treble: {treble:.2f}") #debug
 
             # 3. Presentació / Renderitzat
