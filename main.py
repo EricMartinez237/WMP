@@ -14,7 +14,7 @@ class AudioAnalyzer:
     """Maneja la captura d'àudio loopback (WASAPI) i el processament FFT"""
 
     def __init__(
-        self, chunk_size: int = 1024, smoothing: float = 0.3
+        self, chunk_size: int = 1024, smoothing: float = 0.1
     ) -> None:
         self.chunk_size = chunk_size
         self.smoothing = smoothing
@@ -23,6 +23,10 @@ class AudioAnalyzer:
         self.bass_s = 0.0
         self.mid_s = 0.0
         self.treble_s = 0.0
+
+        self.bass_floor = self.bass_ceil = None
+        self.mid_floor = self.mid_ceil = None
+        self.treble_floor = self.treble_ceil = None
 
         # Inicialització de PyAudio i cerca de dispositiu Loopback
         self.p = pyaudio.PyAudio()
@@ -62,11 +66,28 @@ class AudioAnalyzer:
     def _band_energy(
         self, fft_magnitudes: np.ndarray, low_hz: float, high_hz: float
     ) -> float:
-        """Calcula la energía media en un rango espectral de frecuencias."""
+        """Calcula la energia mitjaen un rang espectral de freqüències."""
         mask = (self.freqs >= low_hz) & (self.freqs <= high_hz)
         if not np.any(mask):
             return 0.0
         return float(np.mean(fft_magnitudes[mask]))
+
+    def _normalize(self, value, floor, ceil, attack=0.1, release=0.01, min_span=1.0):
+        """Actualitza floor/ceil amb attack/release i retorna (valor normalitzat 0-1, floor, ceil)."""
+        if value > ceil:
+            ceil = ceil * (1 - attack) + value * attack
+        else:
+            ceil = ceil * (1 - release) + value * release
+
+        if value < floor:
+            floor = floor * (1 - attack) + value * attack
+        else:
+            floor = floor * (1 - release) + value * release
+
+        span = max(ceil - floor, min_span)  # nunca normalitzar contra rang practicament nul
+        norm = (value - floor) / span if span > 1e-9 else 0.0
+        norm = max(0.0, min(1.0, norm))
+        return norm, floor, ceil
 
     def update(self) -> tuple[float, float, float]:
         """Llegeix el buffer del micròfon/loopback i actualitza les energies filtrades.
@@ -89,14 +110,23 @@ class AudioAnalyzer:
         mid = self._band_energy(fft_mag, 250, 2000)
         treble = self._band_energy(fft_mag, 2000, 8000)
 
-        # Suavitzat suau
-        self.bass_s = self.bass_s * (1 - self.smoothing) + bass * self.smoothing
-        self.mid_s = self.mid_s * (1 - self.smoothing) + mid * self.smoothing
-        self.treble_s = (
-            self.treble_s * (1 - self.smoothing) + treble * self.smoothing
-        )
+        # Primera lectura real
+        if self.bass_floor is None:
+            self.bass_floor = self.bass_ceil = bass
+            self.mid_floor = self.mid_ceil = mid
+            self.treble_floor = self.treble_ceil = treble
 
-        return self.bass_s, self.mid_s, self.treble_s
+        bass_norm, self.bass_floor, self.bass_ceil = self._normalize(bass, self.bass_floor, self.bass_ceil)
+        mid_norm, self.mid_floor, self.mid_ceil = self._normalize(mid, self.mid_floor, self.mid_ceil)
+        treble_norm, self.treble_floor, self.treble_ceil = self._normalize(treble, self.treble_floor, self.treble_ceil)
+
+        # Suavitzat sobre el valor ja normalitzat (0-1)
+        self.bass_s = self.bass_s * (1 - self.smoothing) + bass_norm * self.smoothing
+        self.mid_s = self.mid_s * (1 - self.smoothing) + mid_norm * self.smoothing
+        self.treble_s = self.treble_s * (1 - self.smoothing) + treble_norm * self.smoothing
+
+
+        return bass_norm, mid_norm, treble_norm
 
     def close(self) -> None:
         """Allibera els recursos del sistema d'àudio."""
@@ -129,7 +159,7 @@ class VisualizerRenderer:
 
         # 1. Cercle central reactiu als greus
         center_x, center_y = self.width // 2, self.height // 2
-        radius = 50 + min(bass * 2, 200)
+        radius = 50 + bass * 100  # Amplifica l'efecte visual dels greus
         pygame.draw.circle(
             self.screen, (255, 80, 120), (center_x, center_y), int(radius)
         )
@@ -140,7 +170,7 @@ class VisualizerRenderer:
         colors = [(255, 100, 100), (100, 255, 100), (100, 150, 255)]
 
         for i, (val, color) in enumerate(zip(values, colors)):
-            h = min(int(val * 3), 400)
+            h = int(val*100)  # Altura proporcional a la magnitud
             x = 150 + i * 200
             pygame.draw.rect(
                 self.screen, color, (x, self.height - h, bar_w, h)
@@ -156,7 +186,7 @@ class VisualizerRenderer:
 
 def main():
     # Instancies els dos components principals
-    analyzer = AudioAnalyzer(chunk_size=1024, smoothing=0.3)
+    analyzer = AudioAnalyzer(chunk_size=1024, smoothing=0.1)
     renderer = VisualizerRenderer(width=800, height=600)
 
     running = True
@@ -167,6 +197,7 @@ def main():
 
             # 2. Captura i Processament DSP
             bass, mid, treble = analyzer.update()
+            #print(f"Bass: {bass:.2f}, Mid: {mid:.2f}, Treble: {treble:.2f}") #debug
 
             # 3. Presentació / Renderitzat
             renderer.render(bass, mid, treble)
