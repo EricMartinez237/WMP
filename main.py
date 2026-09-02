@@ -10,6 +10,7 @@ import pyaudiowpatch as pyaudio
 import pygame
 import threading
 import colorsys
+import math
 
 
 class AudioAnalyzer:
@@ -194,20 +195,29 @@ class VisualizerRenderer:
         )
 
         # 2. Barres espectrals (Graves, Mitjans, Aguts)
-        bar_w = 40
+        N = 9  # Nombre de copies simètriques
         values = [bass, mid, treble]
+        
 
-        for i, val in enumerate(values):
-            hue = i /3.0
-            color = self._band_to_color(hue, 0.4 + val*0.6)  # Color amb saturació basada en la magnitud
-            h = int(val*100)  # Altura proporcional a la magnitud
-            x = 150 + i * 200
-            pygame.draw.rect(
-                self.screen, color, (x, self.height - h, bar_w, h)
-            )
-
+        for i in range(N):
+            band_index = i % 3          # cicle entre greus/mitjans/aguts
+            val = values[band_index]
+            hue = band_index / 3.0
+            color = self._band_to_color(hue, 0.4 + val * 0.6)
+            angle = math.radians(i * (360.0 / N))
+            self._draw_radial_bar(angle_rad=angle, length=val * 200, color=color, inner_radius=10, thickness=5)
+            
+    
         pygame.display.flip()
         self.clock.tick(60)
+
+    def _draw_radial_bar(self, angle_rad: float, length: float, color: tuple[int, int, int], inner_radius: int = 30, thickness: int = 20) -> None:
+        center_x, center_y = self.width // 2, self.height // 2
+        start_point = (center_x + inner_radius * math.cos(angle_rad), center_y + inner_radius * math.sin(angle_rad))
+        end_point = (center_x + (inner_radius + length) * math.cos(angle_rad), center_y + (inner_radius + length) * math.sin(angle_rad))
+        pygame.draw.line(self.screen, color, start_point, end_point, thickness)
+
+
 
     def close(self) -> None:
         """Tanca l'entorn gràfic de Pygame."""
