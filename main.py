@@ -9,13 +9,14 @@ import numpy as np
 import pyaudiowpatch as pyaudio
 import pygame
 import threading
+import colorsys
 
 
 class AudioAnalyzer:
     """Maneja la captura d'àudio loopback (WASAPI) i el processament FFT"""
 
     def __init__(
-        self, chunk_size: int = 1024, smoothing: float = 0.1
+        self, chunk_size: int = 2048, smoothing: float = 0.1
     ) -> None:
         self.chunk_size = chunk_size
         self.smoothing = smoothing
@@ -75,7 +76,8 @@ class AudioAnalyzer:
             return 0.0
         return float(np.mean(fft_magnitudes[mask]))
 
-    def _normalize(self, value, floor, ceil, attack=0.1, release=0.01, min_span=1.0):
+    def _normalize(self, value: float, floor: float, ceil: float, attack: float = 0.1, release: float = 0.01, min_span: float = 1.0
+    ) -> tuple[float, float, float]:
         """Actualitza floor/ceil amb attack/release i retorna (valor normalitzat 0-1, floor, ceil)."""
         if value > ceil:
             ceil = ceil * (1 - attack) + value * attack
@@ -144,7 +146,7 @@ class AudioAnalyzer:
         
     def close(self) -> None:
         """Allibera els recursos del sistema d'àudio."""
-        self.running = False # el thread el fil ho veurà a la seva pròxima volta del while i sortirà sol
+        self.running = False # el thread ho veurà a la seva pròxima volta del while i sortirà sol
         self.thread.join() # esperem que el fil acabi ABANS de tocar el stream per no tancar l'àudio mentre encara l'està llegint
         self.stream.stop_stream()
         self.stream.close()
@@ -162,6 +164,10 @@ class VisualizerRenderer:
         pygame.display.set_caption("Mini Visualizer - OOP Architecture")
         self.clock = pygame.time.Clock()
 
+        self.trail_surface = pygame.Surface((self.width, self.height))
+        self.trail_surface.set_alpha(40)  # Transparència per a l'efecte de rastre
+        self.trail_surface.fill((10, 10, 20))  # Color base de fons, es dibuixa una sola vegada; la transparència ve del set_alpha()
+
     def process_events(self) -> bool:
         """Processa la cua d'esdeveniments de Pygame. Retorna False si l'usuari tanca la finestra."""
         for event in pygame.event.get():
@@ -169,23 +175,31 @@ class VisualizerRenderer:
                 return False
         return True
 
-    def render(self, bass: float, mid: float, treble: float) -> None:
-        """Dibuixa un fotograma complet a partir de les magnituds de freqüència."""
-        self.screen.fill((10, 10, 20))
+    def _band_to_color(self, hue: float, value: float) -> tuple[int, int, int]:
+        """Converteix un to (hue) i una lluminositat (value) en un color RGB per a pygame."""
+        r, g, b = colorsys.hsv_to_rgb(hue, 1.0, value)
+        return int(r * 255), int(g * 255), int(b * 255)
 
-        # 1. Cercle central reactiu als greus
+    def render(self, bass: float, mid: float, treble: float) -> None:
+        """Dibuixa un fotograma complet a partir dels valors normalitzats i suavitzats (0-1) de cada banda."""
+        self.screen.blit(self.trail_surface, (0, 0))  # Dibuixa el rastre del fotograma anterior
+
+        # 1. Cercle central reactiu als greus i mitjans
         center_x, center_y = self.width // 2, self.height // 2
         radius = 50 + bass * 100  # Amplifica l'efecte visual dels greus
+        value = 0.4 + mid *0.6
+        r_int, g_int, b_int = self._band_to_color(treble, value)
         pygame.draw.circle(
-            self.screen, (255, 80, 120), (center_x, center_y), int(radius)
+            self.screen, (r_int, g_int, b_int), (center_x, center_y), int(radius)
         )
 
         # 2. Barres espectrals (Graves, Mitjans, Aguts)
         bar_w = 40
         values = [bass, mid, treble]
-        colors = [(255, 100, 100), (100, 255, 100), (100, 150, 255)]
 
-        for i, (val, color) in enumerate(zip(values, colors)):
+        for i, val in enumerate(values):
+            hue = i /3.0
+            color = self._band_to_color(hue, 0.4 + val*0.6)  # Color amb saturació basada en la magnitud
             h = int(val*100)  # Altura proporcional a la magnitud
             x = 150 + i * 200
             pygame.draw.rect(
@@ -202,7 +216,7 @@ class VisualizerRenderer:
 
 def main():
     # Instancies els dos components principals
-    analyzer = AudioAnalyzer(chunk_size=1024, smoothing=0.1)
+    analyzer = AudioAnalyzer(chunk_size=2048, smoothing=0.1)
     renderer = VisualizerRenderer(width=800, height=600)
 
     running = True
@@ -211,7 +225,7 @@ def main():
         while running:
             # 1. Entrada d'usuari
             running = renderer.process_events()
-
+ 
             # 2. Captura i Processament DSP
             bass, mid, treble = analyzer.get_values()
             #print(f"Bass: {bass:.2f}, Mid: {mid:.2f}, Treble: {treble:.2f}") #debug
