@@ -11,6 +11,8 @@ import pygame
 import threading
 import colorsys
 import math
+import random
+from collections import deque
 
 
 class AudioAnalyzer:
@@ -23,6 +25,8 @@ class AudioAnalyzer:
         self.smoothing = smoothing
         self.lock = threading.Lock()
         self.running = True
+        self.beat_flag = False
+        self.beat_cooldown = 0
 
         # Estat del filtre de suavitzat (Exponential Moving Average)
         self.bass_s = 0.0
@@ -40,6 +44,7 @@ class AudioAnalyzer:
         self.rate = int(device["defaultSampleRate"])
         self.channels = device["maxInputChannels"]
         self.freqs = np.fft.rfftfreq(self.chunk_size, 1.0 / self.rate)
+        self.bass_history = deque(maxlen=int(self.rate/self.chunk_size))
 
     def _get_loopback_stream(self):
         """Cercador intern de dispositius de sortida activa (Loopback)."""
@@ -111,6 +116,15 @@ class AudioAnalyzer:
 
         # Extracció de bandes
         bass = self._band_energy(fft_mag, 20, 250)
+        if len(self.bass_history) > 0 and bass > np.mean(self.bass_history) * 1.3 and self.beat_cooldown <= 0:
+            with self.lock:
+                self.beat_flag = True
+                self.beat_cooldown = 2.5
+        else:
+            if self.beat_cooldown > 0:
+                self.beat_cooldown = self.beat_cooldown -1
+        self.bass_history.append(bass)
+
         mid = self._band_energy(fft_mag, 250, 2000)
         treble = self._band_energy(fft_mag, 2000, 8000)
 
@@ -129,6 +143,12 @@ class AudioAnalyzer:
             self.bass_s = self.bass_s * (1 - self.smoothing) + bass_norm * self.smoothing
             self.mid_s = self.mid_s * (1 - self.smoothing) + mid_norm * self.smoothing
             self.treble_s = self.treble_s * (1 - self.smoothing) + treble_norm * self.smoothing
+
+    def get_beat(self)-> bool:
+        with self.lock:
+            beat = self.beat_flag
+            self.beat_flag = False
+        return beat
 
     def _audio_loop(self):
         """Bucle intern per a la captura d'àudio en un fil separat (Thread)."""
@@ -168,6 +188,8 @@ class VisualizerRenderer:
         self.trail_surface = pygame.Surface((self.width, self.height))
         self.trail_surface.set_alpha(40)  # Transparència per a l'efecte de rastre
         self.trail_surface.fill((10, 10, 20))  # Color base de fons, es dibuixa una sola vegada; la transparència ve del set_alpha()
+        self.halos = []
+        self.max_age = 60.0
 
     def process_events(self) -> bool:
         """Processa la cua d'esdeveniments de Pygame. Retorna False si l'usuari tanca la finestra."""
@@ -181,14 +203,14 @@ class VisualizerRenderer:
         r, g, b = colorsys.hsv_to_rgb(hue, 1.0, value)
         return int(r * 255), int(g * 255), int(b * 255)
 
-    def render(self, bass: float, mid: float, treble: float) -> None:
-        """Dibuixa un fotograma complet a partir dels valors normalitzats i suavitzats (0-1) de cada banda."""
+    def render(self, bass: float, mid: float, treble: float, beat: bool) -> None:
+        """Dibuixa un fotograma complet: cercle, barres radials i halos que neixen amb cada beat."""
         self.screen.blit(self.trail_surface, (0, 0))  # Dibuixa el rastre del fotograma anterior
 
         # 1. Cercle central reactiu als greus i mitjans
         center_x, center_y = self.width // 2, self.height // 2
         radius = 50 + bass * 100  # Amplifica l'efecte visual dels greus
-        value = 0.4 + mid *0.6
+        value = 0.4 + mid * 0.6
         r_int, g_int, b_int = self._band_to_color(treble, value)
         pygame.draw.circle(
             self.screen, (r_int, g_int, b_int), (center_x, center_y), int(radius)
@@ -197,21 +219,49 @@ class VisualizerRenderer:
         # 2. Barres espectrals (Graves, Mitjans, Aguts)
         N = 9  # Nombre de copies simètriques
         values = [bass, mid, treble]
-        
+        bar_w = 15
 
         for i in range(N):
-            band_index = i % 3          # cicle entre greus/mitjans/aguts
+            band_index = i % 3 # cicle entre greus/mitjans/aguts
             val = values[band_index]
             hue = band_index / 3.0
             color = self._band_to_color(hue, 0.4 + val * 0.6)
             angle = math.radians(i * (360.0 / N))
-            self._draw_radial_bar(angle_rad=angle, length=val * 200, color=color, inner_radius=10, thickness=5)
-            
+            self._draw_radial_bar(angle_rad=angle, length=val * 200, color=color, inner_radius=20, thickness=5)
+            h = int(val*100)  # Altura proporcional a la magnitud
+            x = int((i + 0.4) * (self.width / N)) # Càlcul width disponible entre barres
+            pygame.draw.rect(
+                self.screen, color, (x, self.height - h, bar_w, h)
+            )
+
+        for halo in self.halos:
+            halo["radius"] += 3
+            halo["age"] += 1
+            life_fraction = halo["age"] / self.max_age
+
+            br, bg, bb = halo["base_color"]
+            r = br * (1 - life_fraction) + 10 * life_fraction
+            g = bg * (1 - life_fraction) + 10 * life_fraction
+            b = bb * (1 - life_fraction) + 20 * life_fraction
+            fade_color = (int(r), int(g), int(b))
+
+            pygame.draw.circle(self.screen, fade_color, (center_x, center_y), int(halo["radius"]), width=2)
+
+        self.halos = [h for h in self.halos if h["age"] / self.max_age < 1.0]
+
+        
+
+        if beat:
+            hue = random.random()  # cualquier valor entre 0.0 y 1.0 → cualquier color del círculo cromático
+            color = self._band_to_color(hue, 1.0)  # value=1.0 para que nazca bien brillante
+            self.halos.append({"radius": radius, "age": 0, "base_color": color})
     
         pygame.display.flip()
         self.clock.tick(60)
 
     def _draw_radial_bar(self, angle_rad: float, length: float, color: tuple[int, int, int], inner_radius: int = 30, thickness: int = 20) -> None:
+        """Dibuixa una línia des del centre cap enfora, en un angle donat (coordenades polars)."""
+
         center_x, center_y = self.width // 2, self.height // 2
         start_point = (center_x + inner_radius * math.cos(angle_rad), center_y + inner_radius * math.sin(angle_rad))
         end_point = (center_x + (inner_radius + length) * math.cos(angle_rad), center_y + (inner_radius + length) * math.sin(angle_rad))
@@ -238,10 +288,11 @@ def main():
  
             # 2. Captura i Processament DSP
             bass, mid, treble = analyzer.get_values()
+            beat = analyzer.get_beat()
             #print(f"Bass: {bass:.2f}, Mid: {mid:.2f}, Treble: {treble:.2f}") #debug
 
             # 3. Presentació / Renderitzat
-            renderer.render(bass, mid, treble)
+            renderer.render(bass, mid, treble, beat)
     finally:
         # Garantim l'alliberament net de recursos
         analyzer.close()
