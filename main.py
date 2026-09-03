@@ -181,7 +181,8 @@ class VisualizerRenderer:
         self.width = width
         self.height = height
         pygame.init()
-        self.screen = pygame.display.set_mode((self.width, self.height))
+        self.canvas = pygame.Surface((self.width, self.height))
+        self.screen = pygame.display.set_mode((self.width, self.height), vsync=1)
         pygame.display.set_caption("Mini Visualizer - OOP Architecture")
         self.clock = pygame.time.Clock()
 
@@ -205,7 +206,7 @@ class VisualizerRenderer:
 
     def render(self, bass: float, mid: float, treble: float, beat: bool) -> None:
         """Dibuixa un fotograma complet: cercle, barres radials i halos que neixen amb cada beat."""
-        self.screen.blit(self.trail_surface, (0, 0))  # Dibuixa el rastre del fotograma anterior
+        self.canvas.blit(self.trail_surface, (0, 0))    # Dibuixa el rastre del fotograma anterior
 
         # 1. Cercle central reactiu als greus i mitjans
         center_x, center_y = self.width // 2, self.height // 2
@@ -213,7 +214,7 @@ class VisualizerRenderer:
         value = 0.4 + mid * 0.6
         r_int, g_int, b_int = self._band_to_color(treble, value)
         pygame.draw.circle(
-            self.screen, (r_int, g_int, b_int), (center_x, center_y), int(radius)
+            self.canvas, (r_int, g_int, b_int), (center_x, center_y), int(radius)
         )
 
         # 2. Barres espectrals (Graves, Mitjans, Aguts)
@@ -231,7 +232,7 @@ class VisualizerRenderer:
             h = int(val*100)  # Altura proporcional a la magnitud
             x = int((i + 0.4) * (self.width / N)) # Càlcul width disponible entre barres
             pygame.draw.rect(
-                self.screen, color, (x, self.height - h, bar_w, h)
+                self.canvas, color, (x, self.height - h, bar_w, h)
             )
 
         for halo in self.halos:
@@ -245,7 +246,7 @@ class VisualizerRenderer:
             b = bb * (1 - life_fraction) + 20 * life_fraction
             fade_color = (int(r), int(g), int(b))
 
-            pygame.draw.circle(self.screen, fade_color, (center_x, center_y), int(halo["radius"]), width=2)
+            pygame.draw.circle(self.canvas, fade_color, (center_x, center_y), int(halo["radius"]), width=2)
 
         self.halos = [h for h in self.halos if h["age"] / self.max_age < 1.0]
 
@@ -255,17 +256,22 @@ class VisualizerRenderer:
             hue = random.random()  # cualquier valor entre 0.0 y 1.0 → cualquier color del círculo cromático
             color = self._band_to_color(hue, 1.0)  # value=1.0 para que nazca bien brillante
             self.halos.append({"radius": radius, "age": 0, "base_color": color})
-    
+
+        self.screen.blit(self.canvas, (0, 0))
         pygame.display.flip()
         self.clock.tick(60)
+        #print(f"FPS: {self.clock.get_fps():.1f}") #debug
+    
+        
 
     def _draw_radial_bar(self, angle_rad: float, length: float, color: tuple[int, int, int], inner_radius: int = 30, thickness: int = 20) -> None:
         """Dibuixa una línia des del centre cap enfora, en un angle donat (coordenades polars)."""
-
+        if length < 1:
+            return
         center_x, center_y = self.width // 2, self.height // 2
         start_point = (center_x + inner_radius * math.cos(angle_rad), center_y + inner_radius * math.sin(angle_rad))
         end_point = (center_x + (inner_radius + length) * math.cos(angle_rad), center_y + (inner_radius + length) * math.sin(angle_rad))
-        pygame.draw.line(self.screen, color, start_point, end_point, thickness)
+        pygame.draw.line(self.canvas, color, start_point, end_point, thickness)
 
 
 
