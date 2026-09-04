@@ -193,6 +193,8 @@ class VisualizerRenderer:
         self.trail_surface.fill(self.bg_color)  # Color base de fons, es dibuixa una sola vegada; la transparència ve del set_alpha()
         self.halos = []
         self.max_age = 60.0
+        self.rotation_angle = 0.0
+        self.hue_shift = 0.0
 
     def process_events(self) -> bool:
         """Processa la cua d'esdeveniments de Pygame. Retorna False si l'usuari tanca la finestra."""
@@ -224,16 +226,18 @@ class VisualizerRenderer:
         N = 9  # Nombre de copies simètriques
         values = [bass, mid, treble]
         bar_w = 15
+        self.rotation_angle = (self.rotation_angle + 0.2) % 360 # Incrementa l'angle de rotació per a l'animació
+        self.hue_shift = (self.hue_shift + 0.001) % 1.0  # Incrementa el desplaçament de to per a l'animació
 
         for i in range(N):
             band_index = i % 3 # cicle entre greus/mitjans/aguts
             val = values[band_index]
-            hue = band_index / 3.0
+            hue = (band_index / 3.0 + self.hue_shift) % 1.0  # Desplaçament de to per a l'animació 
 
             base_color = self._band_to_color(hue, min(1.0, 0.4 + val * 0.6))
             color = self._apply_pulse(base_color, self.pulse)
 
-            angle = math.radians(i * (360.0 / N))
+            angle = math.radians(i * (360.0 / N)+ self.rotation_angle)
             self._draw_radial_bar(angle_rad=angle, length=val * 200, color=color, inner_radius=20, thickness=5)
             h = int(val*100)  # Altura proporcional a la magnitud
             x = int((i + 0.4) * (self.width / N)) # Càlcul width disponible entre barres
