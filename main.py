@@ -7,13 +7,14 @@ de la capa de presentació/renderitzat amb Pygame.
 
 from audio_analyzer import AudioAnalyzer
 from renderer import VisualizerRenderer
-
+from wave_renderer import WaveRenderer
 
 
 def main():
     # Instancies els dos components principals
     analyzer = AudioAnalyzer(chunk_size=2048, smoothing=0.1)
-    renderer = VisualizerRenderer(width=800, height=600)
+    renderer = WaveRenderer(width=800, height=600)
+    # renderer = VisualizerRenderer(width=800, height=600)
 
     running = True
     analyzer.start()
