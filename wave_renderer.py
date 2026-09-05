@@ -27,15 +27,11 @@ class WaveRenderer:
     def render(self, bass: float, mid: float, treble: float, beat: bool) -> None:
         """Dibuixa un fotograma complet: onada principal, ecos retardats i rastre del fotograma anterior."""
         self.canvas.blit(self.trail_surface, (0, 0))
-
-        # Onada principal
+        
         amplitude = 20 + mid * 80
-        self.phase += 0.1 + bass * 0.3
+        self.phase += 0.02
         self.phase_history.append((self.phase, amplitude))
         color = (100, 200, 255)
-        points = self.compute_wave_points(self.phase, amplitude)
-        pygame.draw.lines(self.canvas, color, False, points, width=3)
-
         
         # Dibuixem els ecos, cada un més apagat com més gran és el retard
         for idx, lag in enumerate(self.lags):
@@ -49,6 +45,10 @@ class WaveRenderer:
 
                 pygame.draw.lines(self.canvas, echo_color, False, echo_points, width=2)
 
+        # Onada principal       
+        points = self.compute_wave_points(self.phase, amplitude)
+        pygame.draw.lines(self.canvas, color, False, points, width=3)
+
         self.screen.blit(self.canvas, (0, 0))
         pygame.display.flip()
         self.clock.tick(60)
@@ -57,7 +57,7 @@ class WaveRenderer:
         """Calcula els punts de l'onada de so per a la visualització."""
         points = []
         for x in range(0, self.width, step):
-            y = (self.height / 2 + amplitude * math.sin(0.02 * x + phase))
+            y = self.height / 2 + amplitude * math.sin(0.02 * x + phase) + amplitude * 0.4 * math.sin(0.007 * x + phase * 1.3)
             points.append((x, int(y)))
         return points
     
