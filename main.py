@@ -13,8 +13,8 @@ from wave_renderer import WaveRenderer
 def main():
     # Instancies els dos components principals
     analyzer = AudioAnalyzer(chunk_size=2048, smoothing=0.1)
-    renderer = WaveRenderer(width=800, height=600)
-    # renderer = VisualizerRenderer(width=800, height=600)
+    renderer = WaveRenderer(width=800, height=600) # wave
+    # renderer = VisualizerRenderer(width=800, height=600) # cercle
 
     running = True
     analyzer.start()

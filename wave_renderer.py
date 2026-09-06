@@ -1,6 +1,9 @@
 from collections import deque
 import pygame
 import math
+import random
+
+from bubble import Bubble
 
 class WaveRenderer:
     """Maneja la finestra de Pygame i el dibuix d'elements a la pantalla."""
@@ -20,12 +23,15 @@ class WaveRenderer:
         self.trail_surface.set_alpha(60)  # Transparència per a l'efecte de rastre
         self.trail_surface.fill(self.bg_color)  # Color base de fons, es dibuixa una sola vegada
 
-        self.lags = [5, 10, 15] # frames de retras per cada eco
+        self.lags = [5, 10, 15] # frames de retard per cada eco
         self.phase = 0.0
         self.phase_history = deque(maxlen=300)
 
+        self.bubbles = []  # Llista de bombolles actives
+    
+
     def render(self, bass: float, mid: float, treble: float, beat: bool) -> None:
-        """Dibuixa un fotograma complet: onada principal, ecos retardats i rastre del fotograma anterior."""
+        """Dibuixa un fotograma complet: onada principal, ecos retardats, bombolles i rastre del fotograma anterior."""
         self.canvas.blit(self.trail_surface, (0, 0))
         
         amplitude = 20 + mid * 80
@@ -48,6 +54,18 @@ class WaveRenderer:
         # Onada principal       
         points = self.compute_wave_points(self.phase, amplitude)
         pygame.draw.lines(self.canvas, color, False, points, width=3)
+
+        # Genera una bombolla nova de tant en tant
+        if random.random() < 0.02:
+            x = random.uniform(0, self.width)
+            radius = random.uniform(3, 20)
+            self.bubbles.append(Bubble(x=x, y=self.height, radius=radius))
+
+        for bubble in self.bubbles:
+            bubble.update()
+            bubble.draw(self.canvas)
+
+        self.bubbles = [b for b in self.bubbles if b.is_alive()]
 
         self.screen.blit(self.canvas, (0, 0))
         pygame.display.flip()
