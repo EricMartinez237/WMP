@@ -3,32 +3,19 @@ import pygame
 import math
 import random
 
-from bubble import Bubble
+from renderers.base_renderer import BaseRenderer
+from renderers.wave.bubble import Bubble
 
-class WaveRenderer:
+class WaveRenderer(BaseRenderer):
     """Maneja la finestra de Pygame i el dibuix d'elements a la pantalla."""
 
     def __init__(self, width: int = 800, height: int = 600) -> None:
         """Inicialitza la finestra, el canvas i l'estat de l'onada."""
-        self.width = width
-        self.height = height
-        pygame.init()
-        self.canvas = pygame.Surface((self.width, self.height))
-        self.screen = pygame.display.set_mode((self.width, self.height), vsync=1)
-        pygame.display.set_caption("Mini Visualizer - OOP Architecture")
-        self.clock = pygame.time.Clock()
-
-        self.bg_color = (10, 10, 20)
-        self.trail_surface = pygame.Surface((self.width, self.height))
-        self.trail_surface.set_alpha(60)  # Transparència per a l'efecte de rastre
-        self.trail_surface.fill(self.bg_color)  # Color base de fons, es dibuixa una sola vegada
-
+        super().__init__(width, height, trail_alpha=60)
         self.lags = [5, 10, 15] # frames de retard per cada eco
         self.phase = 0.0
         self.phase_history = deque(maxlen=300)
-
-        self.bubbles = []  # Llista de bombolles actives
-    
+        self.bubbles = [] # Llista de bombolles actives
 
     def render(self, bass: float, mid: float, treble: float, beat: bool) -> None:
         """Dibuixa un fotograma complet: onada principal, ecos retardats, bombolles i rastre del fotograma anterior."""
@@ -47,7 +34,7 @@ class WaveRenderer:
 
                 # Com més gran el retard, més apagat el color (barrejat cap al fons)
                 fade = 1.0 - (idx + 1) / (len(self.lags) + 1)
-                echo_color = tuple(int(c * fade + bg * (1 - fade))for c, bg in zip(color, self.bg_color))
+                echo_color = tuple(int(c * fade + bg * (1 - fade)) for c, bg in zip(color, self.bg_color))
 
                 pygame.draw.lines(self.canvas, echo_color, False, echo_points, width=2)
 
@@ -78,16 +65,3 @@ class WaveRenderer:
             y = self.height / 2 + amplitude * math.sin(0.02 * x + phase) + amplitude * 0.4 * math.sin(0.007 * x + phase * 1.3)
             points.append((x, int(y)))
         return points
-    
-    def process_events(self) -> bool:
-        """Processa la cua d'esdeveniments de Pygame. Retorna False si l'usuari tanca la finestra."""
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return False
-        return True
-
-    def close(self) -> None:
-         """Tanca l'entorn gràfic de Pygame."""
-         pygame.quit()
-
-        

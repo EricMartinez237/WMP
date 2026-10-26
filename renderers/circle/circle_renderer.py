@@ -2,36 +2,19 @@ import pygame
 import colorsys
 import math
 import random
-from halo import Halo
+from renderers.base_renderer import BaseRenderer
+from renderers.circle.halo import Halo
 
-class VisualizerRenderer:
+class VisualizerRenderer(BaseRenderer):
     """Maneja la finestra de Pygame i el dibuix d'elements a la pantalla."""
 
     def __init__(self, width: int = 800, height: int = 600) -> None:
-        self.width = width
-        self.height = height
-        pygame.init()
-        self.canvas = pygame.Surface((self.width, self.height))
-        self.screen = pygame.display.set_mode((self.width, self.height), vsync=1)
-        pygame.display.set_caption("Mini Visualizer - OOP Architecture")
-        self.clock = pygame.time.Clock()
+        super().__init__(width, height, trail_alpha=40)
         self.pulse = 0.0
-
-        self.trail_surface = pygame.Surface((self.width, self.height))
-        self.trail_surface.set_alpha(40)  # Transparència per a l'efecte de rastre
-        self.bg_color = (10, 10, 20)
-        self.trail_surface.fill(self.bg_color)  # Color base de fons, es dibuixa una sola vegada; la transparència ve del set_alpha()
         self.halos = []
         self.max_age = 60.0
         self.rotation_angle = 0.0
         self.hue_shift = 0.0
-
-    def process_events(self) -> bool:
-        """Processa la cua d'esdeveniments de Pygame. Retorna False si l'usuari tanca la finestra."""
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return False
-        return True
 
     def _band_to_color(self, hue: float, value: float, saturation: float = 1.0) -> tuple[int, int, int]:
         """Converteix un to (hue), saturació i lluminositat (value) en un color RGB per a pygame."""
@@ -94,8 +77,6 @@ class VisualizerRenderer:
         self.screen.blit(self.canvas, (0, 0))
         pygame.display.flip()
         self.clock.tick(60)
-        #print(f"FPS: {self.clock.get_fps():.1f}") #debug
-
 
     def _draw_radial_bar(self, angle_rad: float, length: float, color: tuple[int, int, int], inner_radius: int = 30, thickness: int = 20) -> None:
         """Dibuixa una línia des del centre cap enfora, en un angle donat (coordenades polars)."""
@@ -105,7 +86,6 @@ class VisualizerRenderer:
         start_point = (center_x + inner_radius * math.cos(angle_rad), center_y + inner_radius * math.sin(angle_rad))
         end_point = (center_x + (inner_radius + length) * math.cos(angle_rad), center_y + (inner_radius + length) * math.sin(angle_rad))
         pygame.draw.line(self.canvas, color, start_point, end_point, thickness)
-
 
     def _apply_pulse(self, color: tuple[int, int, int], pulse: float) -> tuple[int, int, int]:
         """Fon un color cap al fons quan el pols és baix; el mostra viu quan el pols és alt."""
@@ -117,9 +97,3 @@ class VisualizerRenderer:
             int(g * blend + bg_g * (1 - blend)),
             int(b * blend + bg_b * (1 - blend)),
         )
-
-
-
-    def close(self) -> None:
-        """Tanca l'entorn gràfic de Pygame."""
-        pygame.quit()

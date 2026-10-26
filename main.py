@@ -5,16 +5,16 @@ Estructura orientada a objectes per separar el pipeline del processament d'àudi
 de la capa de presentació/renderitzat amb Pygame.
 """
 
-from audio_analyzer import AudioAnalyzer
-from renderer import VisualizerRenderer
-from wave_renderer import WaveRenderer
+from audio.audio_analyzer import AudioAnalyzer
+from renderers.circle.circle_renderer import VisualizerRenderer
+from renderers.wave.wave_renderer import WaveRenderer
 
 
 def main():
     # Instancies els dos components principals
     analyzer = AudioAnalyzer(chunk_size=2048, smoothing=0.1)
-    renderer = WaveRenderer(width=800, height=600) # wave
-    # renderer = VisualizerRenderer(width=800, height=600) # cercle
+    #renderer = WaveRenderer(width=800, height=600) # wave
+    renderer = VisualizerRenderer(width=800, height=600) # cercle
 
     running = True
     analyzer.start()
@@ -26,7 +26,6 @@ def main():
             # 2. Captura i Processament DSP
             bass, mid, treble = analyzer.get_values()
             beat = analyzer.get_beat()
-            #print(f"Bass: {bass:.2f}, Mid: {mid:.2f}, Treble: {treble:.2f}") #debug
 
             # 3. Presentació / Renderitzat
             renderer.render(bass, mid, treble, beat)
