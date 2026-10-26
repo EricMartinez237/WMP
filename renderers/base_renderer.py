@@ -19,11 +19,14 @@ class BaseRenderer(ABC):
         self.trail_surface.set_alpha(trail_alpha)
         self.trail_surface.fill(self.bg_color)
 
-    def process_events(self) -> bool:
-        """Procesa la cua d'events de Pygame. Retorna False si la finestra  es tanca"""
+    def process_events(self) -> bool | str:
+        """Processa la cua d'esdeveniments. Retorna False si surt, 'switch' si es vol canviar de mode, o True."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    return "switch"
         return True
 
     @abstractmethod

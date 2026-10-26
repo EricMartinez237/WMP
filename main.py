@@ -13,15 +13,25 @@ from renderers.wave.wave_renderer import WaveRenderer
 def main():
     # Instancies els dos components principals
     analyzer = AudioAnalyzer(chunk_size=2048, smoothing=0.1)
-    #renderer = WaveRenderer(width=800, height=600) # wave
-    renderer = VisualizerRenderer(width=800, height=600) # cercle
+
+    # Llista de modes disponibles per anar alternant
+    renderer_classes = [WaveRenderer, VisualizerRenderer]
+    current_index = 0
+    renderer = renderer_classes[current_index](width=800, height=600)
 
     running = True
     analyzer.start()
     try:
         while running:
-            # 1. Entrada d'usuari
-            running = renderer.process_events()
+            # 1. Entrada d'usuari (gestió d'esdeveniments i canvi de mode)
+            action = renderer.process_events()
+            if action is False:
+                running = False
+                break
+            elif action == "switch":
+                renderer.close() # Tanca el renderer actual
+                current_index = (current_index + 1) % len(renderer_classes)
+                renderer = renderer_classes[current_index](width=800, height=600) # Obrim el nou mode
  
             # 2. Captura i Processament DSP
             bass, mid, treble = analyzer.get_values()
