@@ -1,19 +1,19 @@
 # Mini Music Visualizer
 
-Visualizer de música minimalista, inspirat en les figures del Windows
-Media Player de tota la vida. captura l'àudio que sona al sistema (loopback)
-i dibuixa formes que reacciones a les freqüències en temps real.
+A lightweight, object-oriented desktop music visualizer inspired by classic media players. 
+It captures system audio in real-time (WASAPI loopback) and renders responsive visual effects 
+synchronized with frequency bands and audio beats.
+
+Developed with Claude as a learning copilot to accelerate the DSP implementation; design, architectural decisions and code iterations remain my own work.
 
 
-
-Desenvolupat amb Claude com a copilot d'aprenentatge per accelerar la implementació de DSP; el disseny, les decisions darquitectura i les iteracions són meves.
-
-## Requisits
+## Requirements
 
 - Windows 10/11
 - Python 3.9+
 
-## Instalació
+
+## Installation
 
 ```bash
 python -m venv venv
@@ -21,34 +21,33 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Ús
 
-1. Posa música sonant al teu equip (Spotify, WMP, YouTube...).
-2. Executa:
+## Usage
+
+1. Play music on your device (Spotify, WMP, Youtube...).
+2. Execute:
 
 ```bash
 python main.py
 ```
 
-Hauria d'obrir-se una finestra amb un cercle que pulsa amb els greus i tres
-barres d'espectre (greus / mitjans / aguts).
-
-## Com funciona
-
-1. **Captura d'àudio**: s'obre un stream de loopback sobre el dispositiu
-   de sortida por defecte, és a dir, "escolta" el mateix que surt pels teus
-   altaveus, sense necessitat de micròfon.
-2. **FFT**: cada bloc d'àudio (`CHUNK = 1024`) es transforma amb
-   `numpy.fft.rfft` per obtenir l'energía a cada freqüència.
-3. **Bandes**: s'agrupen les freqüències en greus (20–250 Hz), mitjans
-   (250–2000 Hz) i aguts (2000–8000 Hz).
-4. **Suavizat**: els valors es suavitzen amb una mitja
-   (`SMOOTHING`) per tal que les figures no parpallegin bruscament.
-5. **Render**: `pygame` dibuixa el cercle i les barres a cada frame (60 fps).
+A window should open with a wave and some bubbles reacting to the frequencies of the music.
+If you press the spacebar you will change the render to a pulsating circle and spectrum bars.
 
 
-## Nota sobre el bug de Windows Media Player
+## How does it work?
 
-Aquest projecte és independent de WMP: no en depèn ni intenta
-arreglar-ho, així que el bug del visualizer que es queda "congelat" al
-canviar de cançó no t'afectarà aquí.
+1. **Audio Capture**: Opens a WASAPI loopback stream on the default output device to "listen" directly to system audio without requiring a microphone.
+
+2. **Fast Fourier Transform (FFT)**: Each audio block (`CHUNK = 2048`) is processed using `numpy.fft.rfft` to extract frequency domain energy.
+
+3. **Frequency Bands**: Frequencies are grouped into Bass (20–250 Hz), Mids (250–2000 Hz), and Treble (2000–8000 Hz).
+
+4. **Smoothing**: Values are smoothed using an Exponential Moving Average (`SMOOTHING`) to prevent jarring visual flickering.
+
+5. **Rendering**: `pygame` draws the customized shapes, effects, and frame trails at a stable 60 FPS.
+
+
+## A Note on the Classic WMP Bug
+
+This project is entirely independent of the original Windows Media Player (WMP). It does not rely on or attempt to fix WMP, meaning you won't encounter the classic legacy visualizer freezing bug when changing tracks here!
